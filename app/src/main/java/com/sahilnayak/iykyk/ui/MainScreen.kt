@@ -1,19 +1,37 @@
 package com.sahilnayak.iykyk.ui
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -25,18 +43,27 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,13 +74,18 @@ import com.sahilnayak.iykyk.model.PersonResult
 import com.sahilnayak.iykyk.model.ProcessingState
 import kotlin.math.roundToInt
 
-private val Ink = Color(0xFF101516)
-private val Paper = Color(0xFFF5F0E7)
-private val Coral = Color(0xFFFF7657)
-private val Mint = Color(0xFF92D8C7)
-private val Panel = Color(0xFF1A2122)
-private val Hairline = Color(0xFF354041)
-private val Muted = Color(0xFFA8B1AE)
+private val Forest = Color(0xFF12382E)
+private val ForestSoft = Color(0xFF244D41)
+private val Cream = Color(0xFFFFF9ED)
+private val Pistachio = Color(0xFFEFF8C9)
+private val Mint = Color(0xFFC9EFDA)
+private val Lilac = Color(0xFFE8D4F5)
+private val Peach = Color(0xFFF5C7A9)
+private val Quiet = Color(0xFF617069)
+private val Line = Color(0xFFD4DDD2)
+
+private enum class ScreenKey { Home, Processing, Result, Error }
+private enum class AppIcon { Video, Lock, Save, Share, Refresh, Arrow, People }
 
 @Composable
 fun MainScreen(
@@ -63,137 +95,242 @@ fun MainScreen(
     onShare: (Bitmap) -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    Surface(color = Ink, modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Ink)
-                .safeDrawingPadding()
-        ) {
-            EditorialBackdrop()
-            when (val current = state) {
-                ProcessingState.Empty -> EmptyContent(onPickVideo)
-                is ProcessingState.Working -> ProcessingContent(current.progress, current.message)
-                is ProcessingState.Complete -> ResultContent(current, onPickVideo, onSave, onShare)
-                is ProcessingState.Failed -> ErrorContent(current.message, onPickVideo)
+    val screen = when (state) {
+        ProcessingState.Empty -> ScreenKey.Home
+        is ProcessingState.Working -> ScreenKey.Processing
+        is ProcessingState.Complete -> ScreenKey.Result
+        is ProcessingState.Failed -> ScreenKey.Error
+    }
+
+    Surface(color = Cream, modifier = Modifier.fillMaxSize()) {
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = { fadeIn(tween(320)) togetherWith fadeOut(tween(180)) },
+            label = "screen transition"
+        ) { target ->
+            when (target) {
+                ScreenKey.Home -> HomeContent(onPickVideo)
+                ScreenKey.Processing -> {
+                    val working = state as? ProcessingState.Working
+                    ProcessingContent(working?.progress ?: 0f, working?.message.orEmpty())
+                }
+                ScreenKey.Result -> {
+                    val complete = state as? ProcessingState.Complete
+                    if (complete != null) ResultContent(complete, onPickVideo, onSave, onShare)
+                }
+                ScreenKey.Error -> {
+                    val failed = state as? ProcessingState.Failed
+                    ErrorContent(failed?.message.orEmpty(), onPickVideo)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun EditorialBackdrop() {
-    Canvas(Modifier.fillMaxSize()) {
-        drawCircle(Coral.copy(alpha = 0.10f), radius = size.width * 0.48f, center = Offset.Zero)
-        drawCircle(Mint.copy(alpha = 0.07f), radius = size.width * 0.58f, center = Offset(size.width, size.height))
-    }
-}
-
-@Composable
-private fun EmptyContent(onPickVideo: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        BrandHeader()
-        Spacer(Modifier.weight(0.75f))
-        Text("VIDEO → PEOPLE", color = Mint, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Spacer(Modifier.height(14.dp))
-        Text("A cast list\nfor your video.", style = MaterialTheme.typography.displayLarge, color = Paper)
-        Spacer(Modifier.height(16.dp))
-        Box(Modifier.size(width = 64.dp, height = 5.dp).background(Coral, CircleShape))
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "Pick a portrait clip. IYKYK finds every person, counts each return, and keeps their best frame.",
-            color = Muted,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Spacer(Modifier.height(28.dp))
-        ProcessCard()
-        Spacer(Modifier.weight(1f))
-        PrimaryButton("Choose a video", onPickVideo)
-        Spacer(Modifier.height(14.dp))
-        Text(
-            "PRIVATE BY DESIGN  ·  NOTHING LEAVES YOUR PHONE",
-            modifier = Modifier.fillMaxWidth(),
-            color = Muted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.1.sp,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun ProcessCard() {
-    Row(
+private fun HomeContent(onPickVideo: () -> Unit) {
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Panel)
-            .border(1.dp, Hairline, RoundedCornerShape(20.dp))
-            .padding(horizontal = 18.dp, vertical = 17.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .fillMaxSize()
+            .background(Cream)
+            .safeDrawingPadding()
+            .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
-        ProcessStep("01", "Detect", Modifier.weight(1f))
-        ProcessStep("02", "Match", Modifier.weight(1f))
-        ProcessStep("03", "Pick", Modifier.weight(1f))
+        AppHeader("on-device")
+        Spacer(Modifier.height(16.dp))
+        Surface(
+            color = Pistachio,
+            shape = RoundedCornerShape(28.dp, 28.dp, 9.dp, 28.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
+            Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp)) {
+                Text("portrait stories, sorted", color = ForestSoft, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Text("turn a video\ninto a cast.", color = Forest, style = MaterialTheme.typography.displayLarge)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "every person, every return, one frame worth keeping.",
+                    color = Quiet,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Spacer(Modifier.height(16.dp))
+                PortraitDeck(Modifier.fillMaxWidth().weight(1f))
+                Spacer(Modifier.height(14.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    ProcessStep("01", "find faces")
+                    ProcessStep("02", "match people")
+                    ProcessStep("03", "pick the frame")
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        ActionButton("choose a video", AppIcon.Video, onPickVideo)
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LineIcon(AppIcon.Lock, Quiet, Modifier.size(15.dp))
+            Spacer(Modifier.size(6.dp))
+            Text("your frames never leave this phone", color = Quiet, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
 
 @Composable
-private fun ProcessStep(number: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(number, color = Coral, fontSize = 11.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(5.dp))
-        Text(label, color = Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+private fun PortraitDeck(modifier: Modifier = Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        PortraitPlaceholder(
+            color = Peach,
+            modifier = Modifier.fillMaxHeight(0.82f).aspectRatio(0.64f).offset(x = (-76).dp, y = 8.dp).rotate(-7f)
+        )
+        PortraitPlaceholder(
+            color = Lilac,
+            modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(0.64f).offset(x = 72.dp, y = 8.dp).rotate(6f)
+        )
+        PortraitPlaceholder(color = Mint, featured = true, modifier = Modifier.fillMaxHeight().aspectRatio(0.64f))
+    }
+}
+
+@Composable
+private fun PortraitPlaceholder(color: Color, featured: Boolean = false, modifier: Modifier = Modifier) {
+    Surface(
+        color = color,
+        shape = RoundedCornerShape(48.dp, 18.dp, 48.dp, 18.dp),
+        border = BorderStroke(2.dp, Forest),
+        shadowElevation = if (featured) 8.dp else 1.dp,
+        modifier = modifier
+    ) {
+        Box(Modifier.fillMaxSize().padding(12.dp)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
+                drawCircle(Forest, radius = size.minDimension * 0.15f, center = Offset(size.width / 2, size.height * 0.36f), style = stroke)
+                drawArc(
+                    color = Forest,
+                    startAngle = 205f,
+                    sweepAngle = 130f,
+                    useCenter = false,
+                    topLeft = Offset(size.width * 0.23f, size.height * 0.50f),
+                    size = Size(size.width * 0.54f, size.height * 0.36f),
+                    style = stroke
+                )
+                drawLine(Forest.copy(alpha = 0.35f), Offset(0f, size.height * 0.83f), Offset(size.width, size.height * 0.83f), strokeWidth = 1.dp.toPx())
+            }
+            Text(
+                if (featured) "best frame" else "face found",
+                color = Forest,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProcessStep(number: String, label: String) {
+    Column {
+        Text(number, color = Forest.copy(alpha = 0.48f), style = MaterialTheme.typography.labelSmall)
+        Text(label, color = Forest, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
 private fun ProcessingContent(progress: Float, message: String) {
     val safeProgress = progress.coerceIn(0f, 1f)
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        BrandHeader(status = "WORKING ON-DEVICE")
-        Spacer(Modifier.weight(0.8f))
-        Text(
-            "${(safeProgress * 100).roundToInt()}%",
-            color = Coral,
-            fontSize = 72.sp,
-            lineHeight = 76.sp,
-            fontWeight = FontWeight.Black,
-            letterSpacing = (-3).sp
-        )
-        Text(message, color = Paper, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(28.dp))
-        LinearProgressIndicator(
-            progress = { safeProgress },
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
-            color = Coral,
-            trackColor = Hairline
-        )
+    val animatedProgress by animateFloatAsState(safeProgress, tween(350), label = "processing progress")
+    Column(
+        modifier = Modifier.fillMaxSize().background(Cream).safeDrawingPadding().padding(horizontal = 18.dp, vertical = 14.dp)
+    ) {
+        AppHeader("working locally")
         Spacer(Modifier.height(16.dp))
-        ProgressStages(safeProgress)
-        Spacer(Modifier.weight(1.2f))
-        Surface(color = Panel, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(18.dp)) {
-                Text("NO CLOUD. NO UPLOAD.", color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.3.sp)
-                Spacer(Modifier.height(6.dp))
-                Text("Frames are analysed here, then released when you leave.", color = Muted, fontSize = 14.sp)
+        Surface(
+            color = Forest,
+            shape = RoundedCornerShape(28.dp, 28.dp, 28.dp, 9.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
+            Column(Modifier.padding(22.dp)) {
+                Text("finding the people", color = Mint, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "${(animatedProgress * 100).roundToInt()}%",
+                    color = Cream,
+                    fontSize = 68.sp,
+                    lineHeight = 68.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-3).sp
+                )
+                Text(message.lowercase(), color = Cream, style = MaterialTheme.typography.headlineMedium)
+                Spacer(Modifier.height(24.dp))
+                ScanningFrames(Modifier.fillMaxWidth().weight(1f))
+                Spacer(Modifier.height(22.dp))
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
+                    color = Peach,
+                    trackColor = ForestSoft
+                )
+                Spacer(Modifier.height(12.dp))
+                ProgressStages(animatedProgress)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Surface(color = Lilac, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                LineIcon(AppIcon.Lock, Forest, Modifier.size(20.dp))
+                Spacer(Modifier.size(10.dp))
+                Text("no cloud, no upload — everything stays here", color = Forest, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 }
 
 @Composable
+private fun ScanningFrames(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "scanner")
+    val scanPosition by transition.animateFloat(
+        initialValue = 0.08f,
+        targetValue = 0.92f,
+        animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "scan position"
+    )
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.fillMaxWidth().fillMaxHeight(0.74f),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf(Mint, Pistachio, Lilac).forEachIndexed { index, color ->
+                Surface(
+                    color = color,
+                    shape = RoundedCornerShape(
+                        topStart = if (index == 0) 36.dp else 14.dp,
+                        topEnd = 14.dp,
+                        bottomStart = 14.dp,
+                        bottomEnd = if (index == 2) 36.dp else 14.dp
+                    ),
+                    modifier = Modifier.weight(1f).fillMaxHeight(if (index == 1) 1f else 0.88f)
+                ) {
+                    LineIcon(AppIcon.People, Forest.copy(alpha = 0.66f), Modifier.padding(18.dp))
+                }
+            }
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            val y = size.height * scanPosition
+            drawLine(Peach, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
 private fun ProgressStages(progress: Float) {
-    val stages = listOf("DETECT" to 0f, "MATCH" to 0.25f, "SELECT" to 0.70f)
+    val stages = listOf("detect" to 0f, "match" to 0.25f, "select" to 0.70f)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         stages.forEach { (label, start) ->
             Text(
                 label,
-                color = if (progress >= start) Paper else Muted.copy(alpha = 0.45f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp
+                color = if (progress >= start) Cream else Cream.copy(alpha = 0.35f),
+                style = MaterialTheme.typography.labelMedium
             )
         }
     }
@@ -209,101 +346,79 @@ private fun ResultContent(
     val people = state.result.people
     val appearances = people.sumOf(PersonResult::appearanceCount)
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+        modifier = Modifier.fillMaxSize().background(Cream).safeDrawingPadding().verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
-        BrandHeader(status = "COLLAGE READY")
-        Spacer(Modifier.height(24.dp))
-        Text("Your final cut.", color = Paper, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(14.dp))
+        AppHeader("collage ready")
+        Spacer(Modifier.height(20.dp))
+        Text("your people.", color = Forest, style = MaterialTheme.typography.displayMedium)
+        Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(people.size.toString(), if (people.size == 1) "PERSON" else "PEOPLE", Modifier.weight(1f))
-            StatCard(appearances.toString(), "APPEARANCES", Modifier.weight(1f))
+            StatCard(people.size.toString(), if (people.size == 1) "person" else "people", Mint, Modifier.weight(1f))
+            StatCard(appearances.toString(), "appearances", Lilac, Modifier.weight(1f))
         }
-        Spacer(Modifier.height(18.dp))
-        // The preview keeps the Story ratio so the recording matches the saved image.
-        Image(
-            bitmap = state.result.collage.asImageBitmap(),
-            contentDescription = "Generated collage with ${people.size} people and $appearances appearances",
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(9f / 16f)
-                .clip(RoundedCornerShape(20.dp))
-                .border(1.dp, Hairline, RoundedCornerShape(20.dp)),
-            contentScale = ContentScale.FillBounds
-        )
+        Spacer(Modifier.height(14.dp))
+        Surface(
+            color = Forest,
+            shape = RoundedCornerShape(26.dp, 8.dp, 26.dp, 26.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Matching the export ratio here makes the phone recording an honest preview.
+            Image(
+                bitmap = state.result.collage.asImageBitmap(),
+                contentDescription = "collage with ${people.size} people and $appearances appearances",
+                modifier = Modifier.fillMaxWidth().padding(7.dp).aspectRatio(9f / 16f).clip(RoundedCornerShape(20.dp)),
+                contentScale = ContentScale.FillBounds
+            )
+        }
         Spacer(Modifier.height(22.dp))
-        SectionLabel("APPEARANCE BREAKDOWN")
+        Text("appearance notes", color = Forest, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(10.dp))
         AppearanceSummary(people)
-        Spacer(Modifier.height(20.dp))
-        PrimaryButton("Save to gallery") { onSave(state.result.collage) }
+        Spacer(Modifier.height(18.dp))
+        ActionButton("save to gallery", AppIcon.Save) { onSave(state.result.collage) }
         Spacer(Modifier.height(10.dp))
-        OutlinedButton(
-            onClick = { onShare(state.result.collage) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Paper)
-        ) {
-            Text("Share collage", fontWeight = FontWeight.Bold)
-        }
+        SecondaryButton("share collage", AppIcon.Share) { onShare(state.result.collage) }
         Spacer(Modifier.height(10.dp))
-        OutlinedButton(
-            onClick = onPickVideo,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Muted)
-        ) {
-            Text("Process another video", fontWeight = FontWeight.SemiBold)
-        }
+        SecondaryButton("choose another video", AppIcon.Refresh, onPickVideo)
         Spacer(Modifier.height(12.dp))
     }
 }
 
 @Composable
-private fun StatCard(value: String, label: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, color = Panel, shape = RoundedCornerShape(18.dp)) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(value, color = Coral, fontSize = 30.sp, lineHeight = 32.sp, fontWeight = FontWeight.Black)
-            Text(label, color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, modifier = Modifier.padding(bottom = 4.dp))
+private fun StatCard(value: String, label: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(color = color, shape = RoundedCornerShape(22.dp, 22.dp, 7.dp, 22.dp), modifier = modifier) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(value, color = Forest, fontSize = 36.sp, lineHeight = 36.sp, fontWeight = FontWeight.Black)
+            Text(label, color = ForestSoft, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
 @Composable
 private fun AppearanceSummary(people: List<PersonResult>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        people.forEach { person ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Panel)
-                    .border(1.dp, Hairline, RoundedCornerShape(16.dp))
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        people.forEachIndexed { index, person ->
+            val tint = if (index % 2 == 0) Pistachio else Lilac
+            Surface(
+                color = tint,
+                shape = RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
+                border = BorderStroke(1.dp, Line),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Image(
-                    bitmap = person.portrait.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.size(width = 48.dp, height = 54.dp).clip(RoundedCornerShape(11.dp)),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(Modifier.size(12.dp))
-                Text("Person ${person.id.toString().padStart(2, '0')}", color = Paper, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Surface(color = Mint, shape = CircleShape) {
-                    Text(
-                        "${person.appearanceCount}×",
-                        color = Ink,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp)
+                Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        bitmap = person.portrait.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.size(width = 52.dp, height = 58.dp).clip(RoundedCornerShape(16.dp, 7.dp, 16.dp, 7.dp)),
+                        contentScale = ContentScale.Crop
                     )
+                    Spacer(Modifier.size(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("person ${person.id.toString().padStart(2, '0')}", color = Forest, fontWeight = FontWeight.Bold)
+                        Text("clear appearances", color = Quiet, style = MaterialTheme.typography.labelMedium)
+                    }
+                    Text("${person.appearanceCount}×", color = Forest, fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(end = 10.dp))
                 }
             }
         }
@@ -312,45 +427,125 @@ private fun AppearanceSummary(people: List<PersonResult>) {
 
 @Composable
 private fun ErrorContent(message: String, onPickVideo: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 18.dp)) {
-        BrandHeader(status = "NEEDS ANOTHER TAKE")
+    Column(Modifier.fillMaxSize().background(Cream).safeDrawingPadding().padding(18.dp)) {
+        AppHeader("try another clip")
         Spacer(Modifier.weight(1f))
-        Text("We couldn't read that one.", color = Paper, style = MaterialTheme.typography.headlineLarge)
-        Spacer(Modifier.height(10.dp))
-        Text(message, color = Muted, style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(26.dp))
-        PrimaryButton("Choose another video", onPickVideo)
-        Spacer(Modifier.weight(1.2f))
+        Surface(color = Lilac, shape = RoundedCornerShape(30.dp, 30.dp, 30.dp, 8.dp)) {
+            Column(Modifier.padding(24.dp)) {
+                Text("that video needs another take.", color = Forest, style = MaterialTheme.typography.displayMedium)
+                Spacer(Modifier.height(10.dp))
+                Text(message.lowercase(), color = Quiet, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        ActionButton("choose another video", AppIcon.Refresh, onPickVideo)
+        Spacer(Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun BrandHeader(status: String = "PORTRAIT VIDEO LAB") {
+private fun AppHeader(status: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("IYKYK", color = Paper, fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
-        Surface(color = Panel, shape = CircleShape) {
-            Text(status, color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp))
+        Text("vid2collage", color = Forest, fontSize = 20.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp)
+        Surface(color = Color.Transparent, shape = CircleShape, border = BorderStroke(1.dp, Forest.copy(alpha = 0.34f))) {
+            Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp).background(Mint, CircleShape).border(1.dp, Forest, CircleShape))
+                Spacer(Modifier.size(7.dp))
+                Text(status, color = Forest, style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }
 
 @Composable
-private fun SectionLabel(label: String) {
-    Text(label, color = Mint, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.4.sp)
+private fun ActionButton(label: String, icon: AppIcon, onClick: () -> Unit) {
+    PressButton(label, icon, Forest, Cream, onClick)
 }
 
 @Composable
-private fun PrimaryButton(label: String, onClick: () -> Unit) {
+private fun SecondaryButton(label: String, icon: AppIcon, onClick: () -> Unit) {
+    PressButton(label, icon, Cream, Forest, onClick, border = true)
+}
+
+@Composable
+private fun PressButton(
+    label: String,
+    icon: AppIcon,
+    background: Color,
+    foreground: Color,
+    onClick: () -> Unit,
+    border: Boolean = false
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.975f else 1f, spring(stiffness = 520f), label = "button press")
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(58.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Coral, contentColor = Ink)
+        interactionSource = interaction,
+        modifier = Modifier.fillMaxWidth().height(62.dp).graphicsLayer { scaleX = scale; scaleY = scale },
+        shape = RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
+        border = if (border) BorderStroke(1.5.dp, Forest) else null,
+        colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = foreground),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+        contentPadding = PaddingValues(horizontal = 18.dp)
     ) {
-        Text(label, fontWeight = FontWeight.Black, fontSize = 15.sp)
+        LineIcon(icon, foreground, Modifier.size(21.dp))
+        Spacer(Modifier.size(10.dp))
+        Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
+        LineIcon(AppIcon.Arrow, foreground, Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun LineIcon(icon: AppIcon, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.semantics { contentDescription = icon.name.lowercase() }) {
+        val width = 1.8.dp.toPx()
+        val stroke = Stroke(width = width, cap = StrokeCap.Round)
+        when (icon) {
+            AppIcon.Video -> {
+                drawRoundRect(color, Offset(size.width * .08f, size.height * .24f), Size(size.width * .62f, size.height * .58f), CornerRadius(size.minDimension * .12f), style = stroke)
+                val path = Path().apply {
+                    moveTo(size.width * .72f, size.height * .40f)
+                    lineTo(size.width * .94f, size.height * .28f)
+                    lineTo(size.width * .94f, size.height * .76f)
+                    lineTo(size.width * .72f, size.height * .64f)
+                }
+                drawPath(path, color, style = stroke)
+            }
+            AppIcon.Lock -> {
+                drawRoundRect(color, Offset(size.width * .20f, size.height * .43f), Size(size.width * .60f, size.height * .48f), CornerRadius(size.minDimension * .10f), style = stroke)
+                drawArc(color, 180f, 180f, false, Offset(size.width * .31f, size.height * .08f), Size(size.width * .38f, size.height * .56f), style = stroke)
+            }
+            AppIcon.Save -> {
+                drawLine(color, Offset(size.width * .50f, size.height * .10f), Offset(size.width * .50f, size.height * .66f), width, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .28f, size.height * .46f), Offset(size.width * .50f, size.height * .68f), width, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .72f, size.height * .46f), Offset(size.width * .50f, size.height * .68f), width, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .18f, size.height * .88f), Offset(size.width * .82f, size.height * .88f), width, StrokeCap.Round)
+            }
+            AppIcon.Share -> {
+                val points = listOf(Offset(size.width * .24f, size.height * .50f), Offset(size.width * .76f, size.height * .22f), Offset(size.width * .76f, size.height * .78f))
+                drawLine(color, points[0], points[1], width)
+                drawLine(color, points[0], points[2], width)
+                points.forEach { drawCircle(color, size.minDimension * .11f, it, style = stroke) }
+            }
+            AppIcon.Refresh -> {
+                drawArc(color, 35f, 285f, false, Offset(size.width * .14f, size.height * .14f), Size(size.width * .72f, size.height * .72f), style = stroke)
+                drawLine(color, Offset(size.width * .18f, size.height * .18f), Offset(size.width * .17f, size.height * .43f), width)
+                drawLine(color, Offset(size.width * .18f, size.height * .18f), Offset(size.width * .43f, size.height * .18f), width)
+            }
+            AppIcon.Arrow -> {
+                drawLine(color, Offset(size.width * .12f, size.height * .50f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .62f, size.height * .26f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
+                drawLine(color, Offset(size.width * .62f, size.height * .74f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
+            }
+            AppIcon.People -> {
+                drawCircle(color, size.minDimension * .15f, Offset(size.width * .50f, size.height * .30f), style = stroke)
+                drawArc(color, 205f, 130f, false, Offset(size.width * .22f, size.height * .45f), Size(size.width * .56f, size.height * .42f), style = stroke)
+            }
+        }
     }
 }

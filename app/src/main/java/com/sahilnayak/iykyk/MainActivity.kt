@@ -15,7 +15,7 @@ import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.sahilnayak.iykyk.processing.CollageExporter
-import com.sahilnayak.iykyk.ui.IykykTheme
+import com.sahilnayak.iykyk.ui.Vid2CollageTheme
 import com.sahilnayak.iykyk.ui.MainScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,17 +34,23 @@ class MainActivity : ComponentActivity() {
     private val storagePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val bitmap = pendingSave
         pendingSave = null
-        if (granted && bitmap != null) save(bitmap) else toast("Gallery permission is needed to save")
+        if (granted && bitmap != null) save(bitmap) else toast("gallery permission is needed to save")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
+            )
         )
         setContent {
-            IykykTheme {
+            Vid2CollageTheme {
                 MainScreen(
                     viewModel = viewModel,
                     onPickVideo = { videoPicker.launch("video/*") },
@@ -70,8 +76,8 @@ class MainActivity : ComponentActivity() {
     private fun save(bitmap: Bitmap) {
         lifecycleScope.launch {
             runCatching { withContext(Dispatchers.IO) { exporter.save(bitmap) } }
-                .onSuccess { toast("Saved to gallery") }
-                .onFailure { toast(it.message ?: "Could not save collage") }
+                .onSuccess { toast("saved to gallery") }
+                .onFailure { toast(it.message?.lowercase() ?: "could not save collage") }
         }
     }
 
@@ -79,7 +85,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             runCatching { withContext(Dispatchers.IO) { exporter.share(bitmap) } }
                 .onSuccess(::startActivity)
-                .onFailure { toast(it.message ?: "Could not share collage") }
+                .onFailure { toast(it.message?.lowercase() ?: "could not share collage") }
         }
     }
 

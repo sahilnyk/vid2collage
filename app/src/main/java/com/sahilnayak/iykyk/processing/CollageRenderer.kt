@@ -15,7 +15,7 @@ import kotlin.math.max
 class CollageRenderer {
     fun render(people: List<PersonResult>): Bitmap {
         require(people.isNotEmpty())
-        // A 9:16 canvas drops straight into an Instagram Story or the assignment recording.
+        // A 9:16 canvas drops straight into a story or the assignment recording.
         return Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888).also { bitmap ->
             Canvas(bitmap).run {
                 drawBackground(this)
@@ -27,40 +27,31 @@ class CollageRenderer {
     }
 
     private fun drawBackground(canvas: Canvas) {
-        canvas.drawColor(PAPER)
-        canvas.drawRect(0f, 0f, 18f, HEIGHT.toFloat(), solidPaint(CORAL))
-        canvas.drawCircle(1010f, 92f, 170f, solidPaint(MINT))
-        canvas.drawCircle(970f, 1850f, 220f, solidPaint(CORAL, 26))
+        canvas.drawColor(CREAM)
+        canvas.drawRect(0f, 0f, 22f, HEIGHT.toFloat(), solidPaint(FOREST))
+        canvas.drawRect(22f, 0f, 30f, HEIGHT.toFloat(), solidPaint(PEACH))
 
-        val grain = solidPaint(INK, 14)
-        for (y in 0 until HEIGHT step 32) {
-            val offset = if ((y / 32) % 2 == 0) 0f else 12f
-            for (x in 0 until WIDTH step 32) canvas.drawCircle(x + offset, y.toFloat(), 1.2f, grain)
+        val grain = solidPaint(FOREST, 13)
+        for (y in 18 until HEIGHT step 34) {
+            val offset = if ((y / 34) % 2 == 0) 0f else 15f
+            for (x in 45 until WIDTH step 34) canvas.drawCircle(x + offset, y.toFloat(), 1.1f, grain)
         }
     }
 
     private fun drawHeader(canvas: Canvas, people: List<PersonResult>) {
-        val totalAppearances = people.sumOf(PersonResult::appearanceCount)
-        canvas.drawText("IYKYK  /  THE PEOPLE CUT", 64f, 88f, textPaint(24f, INK, Typeface.BOLD, 0.12f))
-        canvas.drawText(
-            people.size.toString().padStart(2, '0'),
-            62f,
-            244f,
-            textPaint(128f, INK, Typeface.BOLD)
-        )
-        canvas.drawText(
-            if (people.size == 1) "PERSON" else "PEOPLE",
-            265f,
-            195f,
-            textPaint(54f, INK, Typeface.BOLD)
-        )
-        canvas.drawText(
-            "$totalAppearances ${if (totalAppearances == 1) "appearance" else "appearances"} across one film",
-            270f,
-            241f,
-            textPaint(26f, Color.argb(175, 16, 21, 22), Typeface.NORMAL)
-        )
-        canvas.drawRect(64f, 278f, 1016f, 282f, solidPaint(INK))
+        val appearances = people.sumOf(PersonResult::appearanceCount)
+        canvas.drawText("vid2collage", 66f, 76f, textPaint(26f, FOREST, Typeface.BOLD))
+        canvas.drawText("the people", 64f, 157f, displayPaint(63f))
+        canvas.drawText("in this film.", 64f, 218f, displayPaint(63f))
+
+        val stat = RectF(760f, 62f, 1018f, 226f)
+        canvas.drawRoundRect(stat, 34f, 34f, solidPaint(LILAC))
+        canvas.drawText(people.size.toString().padStart(2, '0'), 792f, 158f, displayPaint(78f))
+        canvas.drawText(if (people.size == 1) "person" else "people", 910f, 137f, textPaint(25f, FOREST, Typeface.BOLD))
+        canvas.drawText("$appearances appearances", 792f, 194f, textPaint(22f, FOREST_SOFT, Typeface.NORMAL))
+
+        canvas.drawText("one clear frame for every familiar face", 65f, 273f, textPaint(24f, FOREST_SOFT, Typeface.NORMAL))
+        canvas.drawRect(65f, 300f, 1016f, 304f, solidPaint(FOREST))
     }
 
     private fun drawPeople(canvas: Canvas, people: List<PersonResult>) {
@@ -73,15 +64,15 @@ class CollageRenderer {
         val gap = if (columns == 3) 18f else 24f
         val horizontalPadding = if (columns == 1) 118f else 58f
         val availableWidth = WIDTH - horizontalPadding * 2
-        val availableHeight = 1405f
+        val availableHeight = 1380f
         val cardWidth = (availableWidth - gap * (columns - 1)) / columns
-        // Keeping every portrait generous matters more than squeezing the grid edge-to-edge.
+        // Portraits stay generous even when the grid needs another row.
         val cardHeight = minOf(
             (availableHeight - gap * max(0, rows - 1)) / rows,
             cardWidth * 1.50f
         )
         val gridHeight = cardHeight * rows + gap * max(0, rows - 1)
-        val startY = 318f + (availableHeight - gridHeight) / 2f
+        val startY = 332f + (availableHeight - gridHeight) / 2f
 
         people.forEachIndexed { index, person ->
             val row = index / columns
@@ -96,34 +87,52 @@ class CollageRenderer {
     }
 
     private fun drawCard(canvas: Canvas, person: PersonResult, bounds: RectF, index: Int) {
-        val accent = if (index % 2 == 0) CORAL else MINT
-        val plate = RectF(bounds.left + 9f, bounds.top + 10f, bounds.right + 9f, bounds.bottom + 10f)
-        canvas.drawRoundRect(plate, 22f, 22f, solidPaint(accent))
-        canvas.drawRoundRect(bounds, 22f, 22f, solidPaint(INK))
+        val tint = CARD_COLORS[index % CARD_COLORS.size]
+        val cardPath = organicPath(bounds, 30f, 14f, 34f, 14f)
+        canvas.drawPath(cardPath, solidPaint(FOREST))
 
-        val imageBounds = RectF(bounds.left + 7f, bounds.top + 7f, bounds.right - 7f, bounds.bottom - 77f)
+        val imageBounds = RectF(bounds.left + 7f, bounds.top + 7f, bounds.right - 7f, bounds.bottom - 78f)
         canvas.save()
-        canvas.clipPath(Path().apply { addRoundRect(imageBounds, 16f, 16f, Path.Direction.CW) })
+        canvas.clipPath(organicPath(imageBounds, 24f, 10f, 20f, 10f))
         canvas.drawBitmap(person.portrait, sourceRect(person.portrait, imageBounds), imageBounds, IMAGE_PAINT)
         canvas.restore()
 
+        val labelBounds = RectF(bounds.left + 7f, bounds.bottom - 72f, bounds.right - 7f, bounds.bottom - 7f)
+        canvas.drawRoundRect(labelBounds, 11f, 11f, solidPaint(tint))
         val smallCard = bounds.width() < 340f
         canvas.drawText(
-            "PERSON ${person.id.toString().padStart(2, '0')}",
+            "person ${person.id.toString().padStart(2, '0')}",
             bounds.left + 20f,
-            bounds.bottom - 25f,
-            textPaint(if (smallCard) 17f else 21f, PAPER, Typeface.BOLD, 0.06f)
+            bounds.bottom - 28f,
+            textPaint(if (smallCard) 18f else 22f, FOREST, Typeface.BOLD)
         )
         val count = "${person.appearanceCount}×"
-        val countPaint = textPaint(if (smallCard) 22f else 27f, accent, Typeface.BOLD)
-        canvas.drawText(count, bounds.right - countPaint.measureText(count) - 20f, bounds.bottom - 23f, countPaint)
+        val countPaint = textPaint(if (smallCard) 23f else 28f, FOREST, Typeface.BOLD)
+        canvas.drawText(count, bounds.right - countPaint.measureText(count) - 20f, bounds.bottom - 27f, countPaint)
     }
 
     private fun drawFooter(canvas: Canvas) {
-        canvas.drawRect(64f, 1785f, 1016f, 1788f, solidPaint(INK, 80))
-        canvas.drawText("FRAMES STAY ON YOUR PHONE", 64f, 1844f, textPaint(20f, INK, Typeface.BOLD, 0.11f))
-        canvas.drawText("ONE FILM. EVERY RETURN.", 64f, 1882f, textPaint(18f, Color.argb(150, 16, 21, 22), Typeface.NORMAL, 0.08f))
+        val first = RectF(64f, 1775f, 610f, 1862f)
+        val second = RectF(630f, 1775f, 1016f, 1862f)
+        canvas.drawRoundRect(first, 22f, 22f, solidPaint(PISTACHIO))
+        canvas.drawRoundRect(second, 22f, 22f, solidPaint(MINT))
+        canvas.drawText("frames stay on your phone", 88f, 1827f, textPaint(23f, FOREST, Typeface.BOLD))
+        canvas.drawText("one film, every return", 661f, 1827f, textPaint(21f, FOREST, Typeface.BOLD))
     }
+
+    private fun organicPath(bounds: RectF, topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) =
+        Path().apply {
+            addRoundRect(
+                bounds,
+                floatArrayOf(
+                    topLeft, topLeft,
+                    topRight, topRight,
+                    bottomRight, bottomRight,
+                    bottomLeft, bottomLeft
+                ),
+                Path.Direction.CW
+            )
+        }
 
     private fun sourceRect(bitmap: Bitmap, target: RectF): Rect {
         val sourceRatio = bitmap.width.toFloat() / bitmap.height
@@ -144,21 +153,27 @@ class CollageRenderer {
         this.alpha = alpha
     }
 
-    private fun textPaint(size: Float, color: Int, style: Int, spacing: Float = 0f) =
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = size
-            this.color = color
-            typeface = Typeface.create("sans-serif", style)
-            letterSpacing = spacing
-        }
+    private fun displayPaint(size: Float) = textPaint(size, FOREST, Typeface.BOLD).apply {
+        typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+    }
+
+    private fun textPaint(size: Float, color: Int, style: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = size
+        this.color = color
+        typeface = Typeface.create("sans-serif", style)
+    }
 
     companion object {
         const val WIDTH = 1080
         const val HEIGHT = 1920
-        private val INK = Color.rgb(16, 21, 22)
-        private val PAPER = Color.rgb(245, 240, 231)
-        private val CORAL = Color.rgb(255, 118, 87)
-        private val MINT = Color.rgb(146, 216, 199)
+        private val FOREST = Color.rgb(18, 56, 46)
+        private val FOREST_SOFT = Color.rgb(36, 77, 65)
+        private val CREAM = Color.rgb(255, 249, 237)
+        private val PISTACHIO = Color.rgb(239, 248, 201)
+        private val MINT = Color.rgb(201, 239, 218)
+        private val LILAC = Color.rgb(232, 212, 245)
+        private val PEACH = Color.rgb(245, 199, 169)
+        private val CARD_COLORS = intArrayOf(MINT, LILAC, PEACH)
         private val IMAGE_PAINT = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     }
 }

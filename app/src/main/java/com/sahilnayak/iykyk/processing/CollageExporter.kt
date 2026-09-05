@@ -13,12 +13,12 @@ import java.io.File
 class CollageExporter(private val context: Context) {
     fun save(bitmap: Bitmap): Uri {
         val resolver = context.contentResolver
-        val name = "IYKYK_${System.currentTimeMillis()}.jpg"
+        val name = "vid2collage_${System.currentTimeMillis()}.jpg"
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, MIME_TYPE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/IYKYK")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/vid2collage")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
         }
@@ -43,7 +43,7 @@ class CollageExporter(private val context: Context) {
 
     fun share(bitmap: Bitmap): Intent {
         val directory = File(context.cacheDir, "collages").apply { mkdirs() }
-        val file = File(directory, "iykyk-collage.jpg")
+        val file = File(directory, "vid2collage-collage.jpg")
         file.outputStream().use { output ->
             check(bitmap.compress(Bitmap.CompressFormat.JPEG, 95, output))
         }
@@ -52,10 +52,10 @@ class CollageExporter(private val context: Context) {
             Intent(Intent.ACTION_SEND).apply {
                 type = MIME_TYPE
                 putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = android.content.ClipData.newRawUri("IYKYK collage", uri)
+                clipData = android.content.ClipData.newRawUri("vid2collage collage", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             },
-            "Share collage"
+            "share collage"
         )
     }
 
