@@ -39,6 +39,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Face
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
@@ -62,8 +69,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,6 +92,16 @@ private val Line = Color(0xFFD4DDD2)
 
 private enum class ScreenKey { Home, Processing, Result, Error }
 private enum class AppIcon { Video, Lock, Save, Share, Refresh, Arrow, People }
+
+private fun AppIcon.vector(): ImageVector = when (this) {
+    AppIcon.Video -> Icons.Outlined.Face
+    AppIcon.Lock -> Icons.Outlined.Lock
+    AppIcon.Save -> Icons.Outlined.Face
+    AppIcon.Share -> Icons.Outlined.Share
+    AppIcon.Refresh -> Icons.Outlined.Refresh
+    AppIcon.Arrow -> Icons.AutoMirrored.Outlined.ArrowForward
+    AppIcon.People -> Icons.Outlined.Face
+}
 
 @Composable
 fun MainScreen(
@@ -279,7 +295,7 @@ private fun ProcessingContent(progress: Float, message: String) {
             Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
                 LineIcon(AppIcon.Lock, Forest, Modifier.size(20.dp))
                 Spacer(Modifier.size(10.dp))
-                Text("no cloud, no upload — everything stays here", color = Forest, style = MaterialTheme.typography.bodyMedium)
+                Text("no cloud, no upload, everything stays here", color = Forest, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -363,13 +379,23 @@ private fun ResultContent(
             shape = RoundedCornerShape(26.dp, 8.dp, 26.dp, 26.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Matching the export ratio here makes the phone recording an honest preview.
-            Image(
-                bitmap = state.result.collage.asImageBitmap(),
-                contentDescription = "collage with ${people.size} people and $appearances appearances",
-                modifier = Modifier.fillMaxWidth().padding(7.dp).aspectRatio(9f / 16f).clip(RoundedCornerShape(20.dp)),
-                contentScale = ContentScale.FillBounds
-            )
+            Column(Modifier.padding(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("final cut", color = Cream, style = MaterialTheme.typography.labelLarge)
+                    Text("portrait story  ·  9:16", color = Mint, style = MaterialTheme.typography.labelMedium)
+                }
+                // Matching the export ratio here makes the phone recording an honest preview.
+                Image(
+                    bitmap = state.result.collage.asImageBitmap(),
+                    contentDescription = "collage with ${people.size} people and $appearances appearances",
+                    modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(20.dp)),
+                    contentScale = ContentScale.FillBounds
+                )
+            }
         }
         Spacer(Modifier.height(22.dp))
         Text("appearance notes", color = Forest, style = MaterialTheme.typography.headlineSmall)
@@ -502,11 +528,11 @@ private fun PressButton(
 
 @Composable
 private fun LineIcon(icon: AppIcon, color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier.semantics { contentDescription = icon.name.lowercase() }) {
-        val width = 1.8.dp.toPx()
-        val stroke = Stroke(width = width, cap = StrokeCap.Round)
-        when (icon) {
-            AppIcon.Video -> {
+    if (icon == AppIcon.Video || icon == AppIcon.Save) {
+        Canvas(modifier) {
+            val width = 1.8.dp.toPx()
+            val stroke = Stroke(width = width, cap = StrokeCap.Round)
+            if (icon == AppIcon.Video) {
                 drawRoundRect(color, Offset(size.width * .08f, size.height * .24f), Size(size.width * .62f, size.height * .58f), CornerRadius(size.minDimension * .12f), style = stroke)
                 val path = Path().apply {
                     moveTo(size.width * .72f, size.height * .40f)
@@ -515,37 +541,14 @@ private fun LineIcon(icon: AppIcon, color: Color, modifier: Modifier = Modifier)
                     lineTo(size.width * .72f, size.height * .64f)
                 }
                 drawPath(path, color, style = stroke)
-            }
-            AppIcon.Lock -> {
-                drawRoundRect(color, Offset(size.width * .20f, size.height * .43f), Size(size.width * .60f, size.height * .48f), CornerRadius(size.minDimension * .10f), style = stroke)
-                drawArc(color, 180f, 180f, false, Offset(size.width * .31f, size.height * .08f), Size(size.width * .38f, size.height * .56f), style = stroke)
-            }
-            AppIcon.Save -> {
+            } else {
                 drawLine(color, Offset(size.width * .50f, size.height * .10f), Offset(size.width * .50f, size.height * .66f), width, StrokeCap.Round)
                 drawLine(color, Offset(size.width * .28f, size.height * .46f), Offset(size.width * .50f, size.height * .68f), width, StrokeCap.Round)
                 drawLine(color, Offset(size.width * .72f, size.height * .46f), Offset(size.width * .50f, size.height * .68f), width, StrokeCap.Round)
                 drawLine(color, Offset(size.width * .18f, size.height * .88f), Offset(size.width * .82f, size.height * .88f), width, StrokeCap.Round)
             }
-            AppIcon.Share -> {
-                val points = listOf(Offset(size.width * .24f, size.height * .50f), Offset(size.width * .76f, size.height * .22f), Offset(size.width * .76f, size.height * .78f))
-                drawLine(color, points[0], points[1], width)
-                drawLine(color, points[0], points[2], width)
-                points.forEach { drawCircle(color, size.minDimension * .11f, it, style = stroke) }
-            }
-            AppIcon.Refresh -> {
-                drawArc(color, 35f, 285f, false, Offset(size.width * .14f, size.height * .14f), Size(size.width * .72f, size.height * .72f), style = stroke)
-                drawLine(color, Offset(size.width * .18f, size.height * .18f), Offset(size.width * .17f, size.height * .43f), width)
-                drawLine(color, Offset(size.width * .18f, size.height * .18f), Offset(size.width * .43f, size.height * .18f), width)
-            }
-            AppIcon.Arrow -> {
-                drawLine(color, Offset(size.width * .12f, size.height * .50f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
-                drawLine(color, Offset(size.width * .62f, size.height * .26f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
-                drawLine(color, Offset(size.width * .62f, size.height * .74f), Offset(size.width * .86f, size.height * .50f), width, StrokeCap.Round)
-            }
-            AppIcon.People -> {
-                drawCircle(color, size.minDimension * .15f, Offset(size.width * .50f, size.height * .30f), style = stroke)
-                drawArc(color, 205f, 130f, false, Offset(size.width * .22f, size.height * .45f), Size(size.width * .56f, size.height * .42f), style = stroke)
-            }
         }
+    } else {
+        Icon(imageVector = icon.vector(), contentDescription = null, tint = color, modifier = modifier)
     }
 }
