@@ -19,6 +19,14 @@ private val Bricolage = FontFamily(
     Font(R.font.bricolage_grotesque, FontWeight.Black)
 )
 
+private val ArchivoBlack = FontFamily(
+    Font(R.font.archivo_black, FontWeight.Black)
+)
+
+private val ChangaOne = FontFamily(
+    Font(R.font.changa_one, FontWeight.Bold)
+)
+
 private val Colors = lightColorScheme(
     primary = Color(0xFF12382E),
     onPrimary = Color(0xFFFFF9ED),
@@ -33,28 +41,28 @@ private val Colors = lightColorScheme(
 
 private val Type = Typography(
     displayLarge = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = ArchivoBlack,
         fontWeight = FontWeight.Black,
         fontSize = 47.sp,
         lineHeight = 45.sp,
         letterSpacing = (-1.8).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = ArchivoBlack,
         fontWeight = FontWeight.Black,
         fontSize = 38.sp,
         lineHeight = 40.sp,
         letterSpacing = (-1.1).sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = ChangaOne,
         fontWeight = FontWeight.Bold,
         fontSize = 27.sp,
         lineHeight = 31.sp,
         letterSpacing = (-0.5).sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = ChangaOne,
         fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 27.sp

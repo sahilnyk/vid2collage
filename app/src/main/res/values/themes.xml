@@ -1,7 +1,7 @@
 <resources>
     <style name="Theme.Vid2Collage.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/cream</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/app_icon</item>
+        <item name="windowSplashScreenBackground">@color/pistachio</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/Theme.Vid2Collage</item>
     </style>
 
