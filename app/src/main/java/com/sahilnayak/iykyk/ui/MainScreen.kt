@@ -3,15 +3,14 @@ package com.sahilnayak.iykyk.ui
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -22,6 +21,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,6 +39,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Face
@@ -48,11 +49,11 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -63,18 +64,25 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.sahilnayak.iykyk.R
 import com.sahilnayak.iykyk.MainViewModel
 import com.sahilnayak.iykyk.model.PersonResult
 import com.sahilnayak.iykyk.model.ProcessingState
@@ -91,7 +99,7 @@ private val Quiet = Color(0xFF617069)
 private val Line = Color(0xFFD4DDD2)
 
 private enum class ScreenKey { Home, Processing, Result, Error }
-private enum class AppIcon { Video, Lock, Save, Share, Refresh, Arrow, People }
+private enum class AppIcon { Video, Lock, Save, Share, Refresh, Arrow }
 
 private fun AppIcon.vector(): ImageVector = when (this) {
     AppIcon.Video -> Icons.Outlined.Face
@@ -100,7 +108,6 @@ private fun AppIcon.vector(): ImageVector = when (this) {
     AppIcon.Share -> Icons.Outlined.Share
     AppIcon.Refresh -> Icons.Outlined.Refresh
     AppIcon.Arrow -> Icons.AutoMirrored.Outlined.ArrowForward
-    AppIcon.People -> Icons.Outlined.Face
 }
 
 @Composable
@@ -121,14 +128,23 @@ fun MainScreen(
     Surface(color = Cream, modifier = Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = screen,
-            transitionSpec = { fadeIn(tween(320)) togetherWith fadeOut(tween(180)) },
+            transitionSpec = {
+                if (initialState == ScreenKey.Processing && targetState == ScreenKey.Result) {
+                    (fadeIn(tween(420, easing = FastOutSlowInEasing)) +
+                        slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it / 12 } +
+                        scaleIn(initialScale = 0.985f, animationSpec = tween(420))) togetherWith
+                        fadeOut(tween(180))
+                } else {
+                    fadeIn(tween(320)) togetherWith fadeOut(tween(180))
+                }
+            },
             label = "screen transition"
         ) { target ->
             when (target) {
                 ScreenKey.Home -> HomeContent(onPickVideo)
                 ScreenKey.Processing -> {
                     val working = state as? ProcessingState.Working
-                    ProcessingContent(working?.progress ?: 0f, working?.message.orEmpty())
+                    ProcessingContent(working?.progress ?: 0f)
                 }
                 ScreenKey.Result -> {
                     val complete = state as? ProcessingState.Complete
@@ -160,12 +176,12 @@ private fun HomeContent(onPickVideo: () -> Unit) {
             modifier = Modifier.fillMaxWidth().weight(1f)
         ) {
             Column(Modifier.padding(horizontal = 22.dp, vertical = 20.dp)) {
-                Text("portrait stories, sorted", color = ForestSoft, style = MaterialTheme.typography.labelLarge)
+                Text("face grouping, on-device", color = ForestSoft, style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(8.dp))
-                Text("turn a video\ninto a cast.", color = Forest, style = MaterialTheme.typography.displayLarge)
+                Text("one video.\neach person once.", color = Forest, style = MaterialTheme.typography.displayLarge)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "every person, every return, one frame worth keeping.",
+                    "we detect faces, match repeat appearances, and choose one clear frame for every person.",
                     color = Quiet,
                     style = MaterialTheme.typography.bodyLarge
                 )
@@ -199,48 +215,101 @@ private fun PortraitDeck(modifier: Modifier = Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         PortraitPlaceholder(
             color = Peach,
+            illustration = R.drawable.illustration_upload_image,
+            illustrationScale = 1.03f,
             modifier = Modifier.fillMaxHeight(0.82f).aspectRatio(0.64f).offset(x = (-76).dp, y = 8.dp).rotate(-7f)
         )
         PortraitPlaceholder(
             color = Lilac,
+            illustration = R.drawable.illustration_video_files,
+            illustrationScale = 1.14f,
+            showSocialMarks = true,
             modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(0.64f).offset(x = 72.dp, y = 8.dp).rotate(6f)
         )
-        PortraitPlaceholder(color = Mint, featured = true, modifier = Modifier.fillMaxHeight().aspectRatio(0.64f))
+        PortraitPlaceholder(
+            color = Mint,
+            illustration = R.drawable.illustration_video_story,
+            illustrationScale = 1.04f,
+            featured = true,
+            modifier = Modifier.fillMaxHeight().aspectRatio(0.64f)
+        )
     }
 }
 
 @Composable
-private fun PortraitPlaceholder(color: Color, featured: Boolean = false, modifier: Modifier = Modifier) {
+private fun PortraitPlaceholder(
+    color: Color,
+    illustration: Int,
+    illustrationScale: Float = 1f,
+    showSocialMarks: Boolean = false,
+    featured: Boolean = false,
+    borderColor: Color = Forest,
+    illustrationOffsetX: Float = 0f,
+    modifier: Modifier = Modifier
+) {
     Surface(
         color = color,
         shape = RoundedCornerShape(48.dp, 18.dp, 48.dp, 18.dp),
-        border = BorderStroke(2.dp, Forest),
+        border = BorderStroke(2.dp, borderColor),
         shadowElevation = if (featured) 8.dp else 1.dp,
         modifier = modifier
     ) {
         Box(Modifier.fillMaxSize().padding(12.dp)) {
-            Canvas(Modifier.fillMaxSize()) {
-                val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
-                drawCircle(Forest, radius = size.minDimension * 0.15f, center = Offset(size.width / 2, size.height * 0.36f), style = stroke)
-                drawArc(
-                    color = Forest,
-                    startAngle = 205f,
-                    sweepAngle = 130f,
-                    useCenter = false,
-                    topLeft = Offset(size.width * 0.23f, size.height * 0.50f),
-                    size = Size(size.width * 0.54f, size.height * 0.36f),
-                    style = stroke
-                )
-                drawLine(Forest.copy(alpha = 0.35f), Offset(0f, size.height * 0.83f), Offset(size.width, size.height * 0.83f), strokeWidth = 1.dp.toPx())
-            }
-            Text(
-                if (featured) "best frame" else "face found",
-                color = Forest,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.align(Alignment.BottomStart)
+            Image(
+                painter = painterResource(illustration),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = illustrationScale
+                    scaleY = illustrationScale
+                    translationX = illustrationOffsetX * density
+                }
             )
+            if (showSocialMarks) {
+                SocialMarks(
+                    Modifier.align(Alignment.TopEnd).fillMaxHeight().width(90.dp)
+                        .padding(top = 5.dp, end = 7.dp, bottom = 8.dp)
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun SocialMarks(modifier: Modifier = Modifier) {
+    Box(modifier) {
+        SocialLogo(
+            drawable = R.drawable.logo_twitter,
+            rotation = -12f,
+            modifier = Modifier.align(Alignment.TopStart).offset(x = 36.dp, y = 1.dp)
+        )
+        SocialLogo(
+            drawable = R.drawable.logo_instagram,
+            rotation = 9f,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-1).dp, y = 7.dp)
+        )
+        SocialLogo(
+            drawable = R.drawable.logo_snapchat,
+            rotation = 8f,
+            modifier = Modifier.align(Alignment.BottomStart).offset(x = 38.dp, y = (-2).dp)
+        )
+        SocialLogo(
+            drawable = R.drawable.logo_whatsapp,
+            rotation = -11f,
+            modifier = Modifier.align(Alignment.BottomEnd).offset(x = (-3).dp, y = (-3).dp)
+        )
+    }
+}
+
+@Composable
+private fun SocialLogo(drawable: Int, rotation: Float, modifier: Modifier = Modifier) {
+    Image(
+        bitmap = ImageBitmap.imageResource(drawable),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        filterQuality = FilterQuality.High,
+        modifier = modifier.size(20.dp).rotate(rotation)
+    )
 }
 
 @Composable
@@ -252,9 +321,16 @@ private fun ProcessStep(number: String, label: String) {
 }
 
 @Composable
-private fun ProcessingContent(progress: Float, message: String) {
+private fun ProcessingContent(progress: Float) {
     val safeProgress = progress.coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(safeProgress, tween(350), label = "processing progress")
+    val progressLabel = when {
+        safeProgress < 0.18f -> "opening your video"
+        safeProgress < 0.42f -> "finding clear faces"
+        safeProgress < 0.68f -> "matching familiar faces"
+        safeProgress < 0.88f -> "choosing best frames"
+        else -> "building your collage"
+    }
     Column(
         modifier = Modifier.fillMaxSize().background(Cream).safeDrawingPadding().padding(horizontal = 18.dp, vertical = 14.dp)
     ) {
@@ -276,16 +352,13 @@ private fun ProcessingContent(progress: Float, message: String) {
                     fontWeight = FontWeight.Black,
                     letterSpacing = (-3).sp
                 )
-                Text(message.lowercase(), color = Cream, style = MaterialTheme.typography.headlineMedium)
+                Box(Modifier.fillMaxWidth().height(36.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(progressLabel, color = Cream, style = MaterialTheme.typography.headlineMedium)
+                }
                 Spacer(Modifier.height(24.dp))
                 ScanningFrames(Modifier.fillMaxWidth().weight(1f))
                 Spacer(Modifier.height(22.dp))
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
-                    color = Peach,
-                    trackColor = ForestSoft
-                )
+                ModernProgress(animatedProgress)
                 Spacer(Modifier.height(12.dp))
                 ProgressStages(animatedProgress)
             }
@@ -303,37 +376,46 @@ private fun ProcessingContent(progress: Float, message: String) {
 
 @Composable
 private fun ScanningFrames(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "scanner")
-    val scanPosition by transition.animateFloat(
-        initialValue = 0.08f,
-        targetValue = 0.92f,
-        animationSpec = infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "scan position"
-    )
     Box(modifier, contentAlignment = Alignment.Center) {
-        Row(
-            Modifier.fillMaxWidth().fillMaxHeight(0.74f),
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            listOf(Mint, Pistachio, Lilac).forEachIndexed { index, color ->
-                Surface(
-                    color = color,
-                    shape = RoundedCornerShape(
-                        topStart = if (index == 0) 36.dp else 14.dp,
-                        topEnd = 14.dp,
-                        bottomStart = 14.dp,
-                        bottomEnd = if (index == 2) 36.dp else 14.dp
-                    ),
-                    modifier = Modifier.weight(1f).fillMaxHeight(if (index == 1) 1f else 0.88f)
-                ) {
-                    LineIcon(AppIcon.People, Forest.copy(alpha = 0.66f), Modifier.padding(18.dp))
-                }
-            }
+        Box(Modifier.fillMaxWidth().fillMaxHeight(0.74f), contentAlignment = Alignment.Center) {
+            PortraitPlaceholder(
+                color = Peach,
+                illustration = R.drawable.illustration_upload_image,
+                illustrationScale = 1.03f,
+                illustrationOffsetX = -10f,
+                modifier = Modifier.fillMaxHeight(0.82f).aspectRatio(0.64f).offset(x = (-76).dp, y = 8.dp).rotate(-7f)
+            )
+            PortraitPlaceholder(
+                color = Lilac,
+                illustration = R.drawable.illustration_video_files,
+                illustrationScale = 1.14f,
+                showSocialMarks = true,
+                modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(0.64f).offset(x = 72.dp, y = 8.dp).rotate(6f)
+            )
+            PortraitPlaceholder(
+                color = Mint,
+                illustration = R.drawable.illustration_video_story,
+                illustrationScale = 1.04f,
+                featured = true,
+                modifier = Modifier.fillMaxHeight().aspectRatio(0.64f)
+            )
         }
-        Canvas(Modifier.fillMaxSize()) {
-            val y = size.height * scanPosition
-            drawLine(Peach, Offset(0f, y), Offset(size.width, y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun ModernProgress(progress: Float) {
+    Box(
+        Modifier.fillMaxWidth().height(14.dp).clip(CircleShape).background(Mint.copy(alpha = 0.2f))
+    ) {
+        Box(
+            Modifier.fillMaxHeight().fillMaxWidth(progress.coerceAtLeast(0.025f)).clip(CircleShape)
+                .background(Mint)
+        ) {
+            Box(
+                Modifier.align(Alignment.CenterEnd).padding(end = 2.dp).size(10.dp)
+                    .background(Cream, CircleShape)
+            )
         }
     }
 }
@@ -361,62 +443,136 @@ private fun ResultContent(
 ) {
     val people = state.result.people
     val appearances = people.sumOf(PersonResult::appearanceCount)
-    Column(
-        modifier = Modifier.fillMaxSize().background(Cream).safeDrawingPadding().verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 14.dp)
-    ) {
+    Box(Modifier.fillMaxSize().background(Cream)) {
+        Column(
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 14.dp)
+        ) {
         AppHeader("collage ready")
         Spacer(Modifier.height(20.dp))
-        Text("your people.", color = Forest, style = MaterialTheme.typography.displayMedium)
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(people.size.toString(), if (people.size == 1) "person" else "people", Mint, Modifier.weight(1f))
-            StatCard(appearances.toString(), "appearances", Lilac, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(14.dp))
-        Surface(
+        Text(
+            "here's your collage.",
             color = Forest,
-            shape = RoundedCornerShape(26.dp, 8.dp, 26.dp, 26.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(Modifier.padding(8.dp)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("final cut", color = Cream, style = MaterialTheme.typography.labelLarge)
-                    Text("portrait story  ·  9:16", color = Mint, style = MaterialTheme.typography.labelMedium)
-                }
-                // Matching the export ratio here makes the phone recording an honest preview.
-                Image(
-                    bitmap = state.result.collage.asImageBitmap(),
-                    contentDescription = "collage with ${people.size} people and $appearances appearances",
-                    modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.FillBounds
-                )
-            }
-        }
+            style = MaterialTheme.typography.displayMedium.copy(
+                fontWeight = FontWeight.Black,
+                shadow = Shadow(color = Peach, offset = Offset(4f, 4f), blurRadius = 0f)
+            )
+        )
+        Spacer(Modifier.height(14.dp))
+        ResultSummary(people.size, appearances)
+        Spacer(Modifier.height(16.dp))
+        Image(
+            bitmap = state.result.collage.asImageBitmap(),
+            contentDescription = "collage with ${people.size} people and $appearances appearances",
+            modifier = Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(20.dp))
+                .border(3.dp, Forest, RoundedCornerShape(20.dp)),
+            contentScale = ContentScale.FillBounds
+        )
         Spacer(Modifier.height(22.dp))
-        Text("appearance notes", color = Forest, style = MaterialTheme.typography.headlineSmall)
+        Text("the clearest frames we found", color = Forest, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(10.dp))
         AppearanceSummary(people)
         Spacer(Modifier.height(18.dp))
         ActionButton("save to gallery", AppIcon.Save) { onSave(state.result.collage) }
         Spacer(Modifier.height(10.dp))
-        SecondaryButton("share collage", AppIcon.Share) { onShare(state.result.collage) }
+        SecondaryButton("share collage with your friends", AppIcon.Share) { onShare(state.result.collage) }
         Spacer(Modifier.height(10.dp))
         SecondaryButton("choose another video", AppIcon.Refresh, onPickVideo)
         Spacer(Modifier.height(12.dp))
+        }
+        CelebrationBurst(Modifier.matchParentSize())
     }
 }
 
 @Composable
-private fun StatCard(value: String, label: String, color: Color, modifier: Modifier = Modifier) {
-    Surface(color = color, shape = RoundedCornerShape(22.dp, 22.dp, 7.dp, 22.dp), modifier = modifier) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(value, color = Forest, fontSize = 36.sp, lineHeight = 36.sp, fontWeight = FontWeight.Black)
-            Text(label, color = ForestSoft, style = MaterialTheme.typography.labelLarge)
+private fun CelebrationBurst(modifier: Modifier = Modifier) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(1800, easing = FastOutSlowInEasing))
+    }
+    val burstProgress = progress.value
+    val fade = if (burstProgress < 0.78f) 1f else 1f - ((burstProgress - 0.78f) / 0.22f)
+    BoxWithConstraints(modifier) {
+        val popperScale = (0.72f + (burstProgress / 0.18f).coerceAtMost(1f) * 0.28f)
+        val popperTop = maxHeight * 0.12f
+        Canvas(Modifier.matchParentSize().graphicsLayer { alpha = fade.coerceIn(0f, 1f) }) {
+            val origin = Offset(size.width * 0.5f, size.height * 0.19f)
+            val colors = listOf(Color(0xFFFCE18A), Color(0xFFFF726D), Color(0xFFF4306D), Color(0xFFB48DEF), Color(0xFF55ACEE))
+            repeat(30) { index ->
+                val lane = (index % 15 - 7f) / 7f
+                val tier = index / 15
+                val xVelocity = lane * (126.dp.toPx() + tier * 18.dp.toPx())
+                val yVelocity = -(74.dp.toPx() + (index % 5) * 9.dp.toPx())
+                val gravity = 205.dp.toPx() + tier * 24.dp.toPx()
+                val x = origin.x + xVelocity * burstProgress
+                val y = origin.y + yVelocity * burstProgress + gravity * burstProgress * burstProgress
+                val particleWidth = (6 + index % 3).dp.toPx()
+                val particleHeight = (3 + index % 2).dp.toPx()
+                val color = colors[index % colors.size]
+                when (index % 8) {
+                    0 -> drawCircle(color, (4 + index % 2).dp.toPx(), Offset(x, y))
+                    1 -> {
+                        val triangle = Path().apply {
+                            moveTo(x, y - 5.dp.toPx())
+                            lineTo(x + 5.dp.toPx(), y + 4.dp.toPx())
+                            lineTo(x - 5.dp.toPx(), y + 4.dp.toPx())
+                            close()
+                        }
+                        drawPath(triangle, color)
+                    }
+                    2 -> {
+                        val ribbon = Path().apply {
+                            moveTo(x - 7.dp.toPx(), y - 5.dp.toPx())
+                            cubicTo(
+                                x + 8.dp.toPx(), y - 8.dp.toPx(),
+                                x - 8.dp.toPx(), y + 8.dp.toPx(),
+                                x + 7.dp.toPx(), y + 6.dp.toPx()
+                            )
+                        }
+                        drawPath(ribbon, color, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                    }
+                    else -> rotate(index * 29f + burstProgress * 250f, Offset(x, y)) {
+                        drawRoundRect(
+                            color = color,
+                            topLeft = Offset(x - particleWidth / 2f, y - particleHeight / 2f),
+                            size = Size(particleWidth, particleHeight),
+                            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+        Image(
+            painter = painterResource(R.drawable.party_popper),
+            contentDescription = null,
+            modifier = Modifier.align(Alignment.TopCenter).offset(y = popperTop).size(80.dp)
+                .graphicsLayer {
+                    alpha = fade.coerceIn(0f, 1f)
+                    scaleX = popperScale
+                    scaleY = popperScale
+                    rotationZ = -4f + burstProgress.coerceAtMost(0.2f) * 20f
+                },
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+private fun ResultSummary(people: Int, appearances: Int) {
+    Surface(
+        color = Mint,
+        shape = RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
+        border = BorderStroke(2.dp, Forest),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("$people people", color = Forest, fontSize = 17.sp, fontWeight = FontWeight.Black)
+            Box(Modifier.size(5.dp).background(Forest.copy(alpha = 0.45f), CircleShape))
+            Text("$appearances appearances", color = Forest, fontSize = 17.sp, fontWeight = FontWeight.Black)
         }
     }
 }
@@ -429,7 +585,7 @@ private fun AppearanceSummary(people: List<PersonResult>) {
             Surface(
                 color = tint,
                 shape = RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp),
-                border = BorderStroke(1.dp, Line),
+                border = BorderStroke(2.dp, Forest),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -476,7 +632,14 @@ private fun AppHeader(status: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("vid2collage", color = Forest, fontSize = 20.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp)
+        Text(
+            "vid2collage",
+            color = Forest,
+            fontFamily = MaterialTheme.typography.displayLarge.fontFamily,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = (-0.7).sp
+        )
         Surface(color = Color.Transparent, shape = CircleShape, border = BorderStroke(1.dp, Forest.copy(alpha = 0.34f))) {
             Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).background(Mint, CircleShape).border(1.dp, Forest, CircleShape))
