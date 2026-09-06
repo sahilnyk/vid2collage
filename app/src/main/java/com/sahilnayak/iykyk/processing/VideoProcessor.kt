@@ -56,7 +56,7 @@ class VideoProcessor(private val context: Context) : AutoCloseable {
                             tracker.add(observations, frame.timestampMs)
                             processedFrames++
                             val progress = processedFrames.toFloat() / reader.frameCount
-                            onProgress(progress.coerceIn(0f, 1f), progressMessage(progress))
+                            onProgress(progress.coerceIn(0f, 1f), "Finding clear faces")
                         } finally {
                             frame.bitmap.recycle()
                         }
@@ -105,12 +105,6 @@ class VideoProcessor(private val context: Context) : AutoCloseable {
             end = maxOf(end, currentEnd)
         }
         return count
-    }
-
-    private fun progressMessage(progress: Float) = when {
-        progress < 0.25f -> "Finding clear faces"
-        progress < 0.7f -> "Following each appearance"
-        else -> "Choosing the best moments"
     }
 
     companion object {
